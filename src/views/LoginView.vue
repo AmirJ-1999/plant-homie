@@ -1,5 +1,6 @@
 <template>
     <div class="login-page">
+       <img src="@/assets/sun-logo.png" alt="Logo" class="logo-image" />
       <h1 class="logo">🌿 Plant Homie</h1>
       <form @submit.prevent="handleLogin">
         <div class="form-group">
@@ -13,6 +14,7 @@
         <button type="submit" class="login-button">Login</button>
       </form>
       <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
+      <p class="signup-text">Don't have an account? <router-link to="/signup">Sign up here</router-link></p>
     </div>
   </template>
   
@@ -94,3 +96,4 @@
     color: red;
   }
   </style>
+  

@@ -5,6 +5,7 @@ import NotificationsView from '../views/NotificationsView.vue';
 import HistoryView from '../views/HistoryView.vue';
 import AddRemoveView from '../views/AddRemoveView.vue';
 import LoginView from '../views/LoginView.vue';
+import SignupView from '../views/SignupView.vue'; 
 
 const routes = [
   {
@@ -14,6 +15,7 @@ const routes = [
     }
   },
   { path: '/login', name: 'Login', component: LoginView },
+  { path: '/signup', name: 'Signup', component: SignupView }, 
   { path: '/dashboard', name: 'Dashboard', component: DashboardView, meta: { requiresAuth: true } },
   { path: '/plant-list', name: 'PlantList', component: PlantListView, meta: { requiresAuth: true } },
   { path: '/notifications', name: 'Notifications', component: NotificationsView, meta: { requiresAuth: true } },
