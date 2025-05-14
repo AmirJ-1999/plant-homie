@@ -1,9 +1,15 @@
 // src/services/UserService.js
-import axios from 'axios';
+import { API } from './api';
 
-const API = axios.create({
-  baseURL: process.env.VUE_APP_BACKEND_URL || 'https://planthomieapi2025-b4aag0cnb6d2gsf6.westeurope-01.azurewebsites.net/api'
+// ---------- SIGNUP ----------
+export const signup = data => API.post('/user/signup', {
+  userName    : data.username,
+  password    : data.password,
+  subscription: data.plan
 });
 
-export const signup = data => API.post('/user/signup', data); // {userName, password, subscription}
-export const login  = data => API.post('/user/login',  data); // {userName, password}
+// ---------- LOGIN ----------
+export const login = data => API.post('/user/login', {
+  userName: data.username,
+  password: data.password
+});
