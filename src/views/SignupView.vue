@@ -79,12 +79,6 @@ export default {
         return;
       }
 
-      // --- Password must have unique characters ---
-      const uniqueChars = new Set(this.password.split(''));
-      if (uniqueChars.size !== this.password.length) {
-        this.message = '❌ Alle tegn i passwordet skal være unikke.';
-        return;
-      }
 
       // ✅ Passed validation – send to backend
       const userData = {
