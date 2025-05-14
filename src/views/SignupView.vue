@@ -51,7 +51,6 @@ import { useRouter } from 'vue-router';
 
 const API = axios.create({
   baseURL:
-    import.meta.env.VITE_BACKEND_URL ||       // Vite
     process.env.VUE_APP_BACKEND_URL ||        // Vue-CLI
     'https://planthomieapi2025-b4aag0cnb6d2gsf6.westeurope-01.azurewebsites.net/api'
 });
@@ -62,11 +61,11 @@ export default {
     const router       = useRouter();
 
     // --- reactive state ---
-    const username     = Vue.ref('');
-    const password     = Vue.ref('');
-    const selectedPlan = Vue.ref('Free');
-    const message      = Vue.ref('');
-    const ok           = Vue.ref(false);
+    const username     = this.ref('');
+    const password     = this.ref('');
+    const selectedPlan = this.ref('Free');
+    const message      = this.ref('');
+    const ok           = this.ref(false);
 
     /* ----------------------------
        FELT-VALIDERING
