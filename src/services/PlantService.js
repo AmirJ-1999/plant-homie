@@ -6,7 +6,7 @@ import axios from 'axios';
    process.env.VUE_APP_*
 -------------------------------------------- */
 const backendUrl =
-  process.env.VUE_APP_BACKEND_URL || 'https://localhost:5001/api';
+  process.env.VUE_APP_BACKEND_URL || 'https://planthomieapi2025-b4aag0cnb6d2gsf6.westeurope-01.azurewebsites.net/api';
 
 const API = axios.create({ baseURL: backendUrl });
 

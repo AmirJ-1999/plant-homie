@@ -14,7 +14,7 @@
 <script>
 import axios from 'axios';
 
-const API_BASE = 'https://localhost:5001/api';
+const API_BASE = 'https://planthomieapi2025-b4aag0cnb6d2gsf6.westeurope-01.azurewebsites.net/api';
 
 export default {
   name: 'HistoryView',
