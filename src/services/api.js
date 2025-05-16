@@ -7,3 +7,12 @@ export const baseURL =
   'https://planthomieapi2025-b4aag0cnb6d2gsf6.westeurope-01.azurewebsites.net/api';
 
 export const API = axios.create({ baseURL });
+
+// Add a request interceptor to automatically attach the token
+API.interceptors.request.use(config => {
+  const token = sessionStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});

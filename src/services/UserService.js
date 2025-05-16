@@ -1,7 +1,7 @@
 // src/services/UserService.js
 import { API } from './api';
 
-/* ---------- SIGNUP ---------- */
+/* Funktion til oprettelse af ny bruger */
 export const signup = ({ username, password, plan }) =>
   API.post('/user/signup', {
     userName    : username,
@@ -9,22 +9,22 @@ export const signup = ({ username, password, plan }) =>
     subscription: plan
   });
   
-/* ---------- LOGIN ---------- */
+/* Funktion til at logge en bruger ind */
 export const login = ({ username, password }) =>
   API.post('/user/login', { userName: username, password });
 
-/* ---------- GET USER DATA ---------- */
+/* Funktion til at hente specifikke brugerdata (bemærk: henter pt. alle og filtrerer) */
 export const getUserData = (username) => 
   API.get('/user')
     .then(response => {
-      // Find the user with matching username in the array
+      // Leder efter brugeren med det rigtige brugernavn i listen vi fik tilbage
       if (Array.isArray(response.data)) {
         return response.data.find(user => user.userName === username || user.UserName === username);
       }
       return null;
     });
 
-/* ---------- GET USER PROFILE ---------- */
+/* Funktion til at hente den aktuelle brugers profil */
 export const getUserProfile = () => {
   const token = sessionStorage.getItem('token');
   return API.get('/user/profile', {
