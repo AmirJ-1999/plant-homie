@@ -29,10 +29,10 @@ export default {
       this.history = res.data.map(log => ({
         id: log.plantLog_ID,
         timestamp: new Date(log.dato_Tid).toLocaleString(),
-        action: `Temp: ${log.temperatureLevel}°C, Moisture: ${log.waterLevel}%, Humidity: ${log.airHumidityLevel}%`
+        action: `Temp: ${log.temperatureLevel.toFixed(2)}°C, Moisture: ${log.waterLevel.toFixed(2)}%, Humidity: ${log.airHumidityLevel.toFixed(2)}%`
       }));
     } catch (err) {
-      console.error('Kunne ikke hente historik:', err);
+      console.error('Could not fetch history:', err);
     }
   },
 };
