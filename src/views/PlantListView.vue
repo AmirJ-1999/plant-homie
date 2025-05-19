@@ -244,4 +244,72 @@
       transform: scale(1);
     }
   }
+  
+  @media (max-width: 768px) {
+    .container {
+      padding: 1.5rem;
+      padding-top: 4rem; /* Add space for fixed navbar */
+    }
+    
+    .title {
+      font-size: 1.5rem;
+      margin-top: 0;
+      margin-bottom: 1.5rem;
+      display: block;
+      text-align: center;
+    }
+    
+    .search-container {
+      flex-direction: column;
+      gap: 1rem;
+    }
+    
+    .search-container > * {
+      flex: none;
+      width: 100%;
+    }
+    
+    .search-input {
+      max-width: 100%;
+    }
+    
+    .filter-select {
+      max-width: 100%;
+    }
+    
+    .search-button {
+      width: 100%;
+      margin-top: 0.5rem;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .container {
+      padding: 1rem;
+      padding-top: 4rem; /* Keep space for fixed navbar */
+    }
+    
+    .title {
+      font-size: 1.3rem;
+      margin-bottom: 1rem;
+      padding: 0 0.5rem;
+      display: block;
+      text-align: center;
+      color: white;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+    
+    .search-box {
+      padding: 0.6rem 0.8rem;
+      width: 100%;
+    }
+    
+    .filter-dropdown {
+      padding: 0.6rem 0.8rem;
+    }
+    
+    .search-button {
+      padding: 0.6rem 0.8rem;
+    }
+  }
   </style>
