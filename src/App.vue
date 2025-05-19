@@ -29,21 +29,26 @@
     
     <nav v-if="isLoggedIn" class="navbar">
       <div class="nav-left">
-        <router-link to="/dashboard">
-          <i class="nav-icon">🏠</i> Dashboard
-        </router-link>
-        <router-link to="/plant-list">
-          <i class="nav-icon">🌱</i> Plant List
-        </router-link>
-        <router-link to="/notifications">
-          <i class="nav-icon">🔔</i> Notifications
-        </router-link>
-        <router-link to="/history">
-          <i class="nav-icon">📋</i> History
-        </router-link>
-        <router-link to="/add-remove">
-          <i class="nav-icon">➕</i> Add/Remove Plants
-        </router-link>
+        <button class="mobile-menu-toggle" @click="toggleMobileMenu">
+          <span class="menu-icon"></span>
+        </button>
+        <div class="nav-links" :class="{ 'mobile-open': mobileMenuOpen }">
+          <router-link to="/dashboard">
+            <i class="nav-icon">🏠</i> Dashboard
+          </router-link>
+          <router-link to="/plant-list">
+            <i class="nav-icon">🌱</i> Plant List
+          </router-link>
+          <router-link to="/notifications">
+            <i class="nav-icon">🔔</i> Notifications
+          </router-link>
+          <router-link to="/history">
+            <i class="nav-icon">📋</i> History
+          </router-link>
+          <router-link to="/add-remove">
+            <i class="nav-icon">➕</i> Add/Remove Plants
+          </router-link>
+        </div>
       </div>
       <div class="nav-right">
         <button @click="logout" class="logout-button">Logout</button>
@@ -60,7 +65,8 @@ export default {
   data() {
     return {
       isLoggedIn: !!sessionStorage.getItem('token'),
-      mascotSpeech: ''
+      mascotSpeech: '',
+      mobileMenuOpen: false
     };
   },
   watch: {
@@ -68,9 +74,14 @@ export default {
     $route() {
       this.isLoggedIn = !!sessionStorage.getItem('token');
       this.updateMascotSpeech();
+      // Close mobile menu when route changes
+      this.mobileMenuOpen = false;
     }
   },
   methods: {
+    toggleMobileMenu() {
+      this.mobileMenuOpen = !this.mobileMenuOpen;
+    },
     logout() {
       sessionStorage.clear();
       this.isLoggedIn = false;
@@ -325,7 +336,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.8rem 2rem;
+  padding: 0.8rem 1rem;
   background: linear-gradient(to right, #4ade80, #22c55e);
   border-bottom: 1px solid #86efac;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
@@ -336,10 +347,16 @@ body {
 
 .nav-left {
   display: flex;
+  position: relative;
+  align-items: center;
+}
+
+.nav-links {
+  display: flex;
   gap: 1.5rem;
 }
 
-.nav-left a {
+.nav-links a {
   text-decoration: none;
   color: white;
   font-weight: 500;
@@ -348,6 +365,7 @@ body {
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
+  white-space: nowrap;
 }
 
 .nav-icon {
@@ -355,12 +373,12 @@ body {
   font-style: normal;
 }
 
-.nav-left a:hover {
+.nav-links a:hover {
   background-color: rgba(255, 255, 255, 0.2);
   transform: translateY(-2px);
 }
 
-.nav-left a.router-link-exact-active {
+.nav-links a.router-link-exact-active {
   font-weight: bold;
   background-color: rgba(255, 255, 255, 0.25);
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
@@ -384,6 +402,57 @@ body {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
+/* Mobile Menu Toggle */
+.mobile-menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  width: 30px;
+  height: 30px;
+  position: relative;
+  cursor: pointer;
+  margin-right: 10px;
+  z-index: 101;
+}
+
+.menu-icon, 
+.menu-icon::before, 
+.menu-icon::after {
+  content: '';
+  display: block;
+  position: absolute;
+  height: 3px;
+  width: 100%;
+  background-color: white;
+  transition: all 0.3s ease;
+}
+
+.menu-icon {
+  top: 13px;
+}
+
+.menu-icon::before {
+  top: -8px;
+}
+
+.menu-icon::after {
+  bottom: -8px;
+}
+
+.mobile-menu-toggle.active .menu-icon {
+  background-color: transparent;
+}
+
+.mobile-menu-toggle.active .menu-icon::before {
+  transform: rotate(45deg);
+  top: 0;
+}
+
+.mobile-menu-toggle.active .menu-icon::after {
+  transform: rotate(-45deg);
+  bottom: 0;
+}
+
 h1, h2, h3 {
   color: #166534;
 }
@@ -392,7 +461,7 @@ button {
   cursor: pointer;
 }
 
-/* Responsive styles for mascot */
+/* Responsive styles */
 @media (max-width: 768px) {
   .mascot-container {
     right: 10px;
@@ -407,6 +476,214 @@ button {
   .mascot-speech {
     max-width: 150px;
     font-size: 0.8rem;
+  }
+  
+  .mascot-sun {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .mascot-eyes {
+    top: 10px;
+  }
+  
+  .mascot-eye {
+    width: 6px;
+    height: 6px;
+  }
+  
+  .mascot-smile {
+    width: 20px;
+    height: 10px;
+    bottom: 10px;
+    border-bottom-width: 2px;
+  }
+  
+  .mascot-pot {
+    width: 30px;
+    height: 25px;
+  }
+  
+  .mascot-pot::before {
+    height: 4px;
+    top: -4px;
+  }
+  
+  .mascot-plant {
+    width: 25px;
+    height: 30px;
+    bottom: 18px;
+  }
+  
+  .mascot-stem {
+    height: 18px;
+    width: 2px;
+  }
+  
+  .mascot-leaf {
+    width: 12px;
+    height: 15px;
+  }
+  
+  /* Mobile navigation styles */
+  .navbar {
+    padding: 0.6rem 1rem;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+  }
+  
+  .mobile-menu-toggle {
+    display: block;
+    padding: 8px;
+    margin: -8px 5px -8px -8px;
+  }
+  
+  .mobile-menu-toggle.active + .nav-links {
+    left: 0;
+  }
+  
+  .nav-links {
+    position: fixed;
+    top: 0;
+    left: -100%;
+    height: 100vh;
+    width: 75%;
+    max-width: 300px;
+    flex-direction: column;
+    gap: 0;
+    background-color: #22c55e;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+    transition: left 0.3s ease;
+    padding-top: 60px;
+    z-index: 100;
+  }
+  
+  .nav-links.mobile-open {
+    left: 0;
+  }
+  
+  .nav-links a {
+    padding: 1rem;
+    border-radius: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .logout-button {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .navbar {
+    padding: 0.5rem;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    z-index: 1000;
+  }
+  
+  .logout-button {
+    font-size: 0.85rem;
+    padding: 0.4rem 0.6rem;
+  }
+  
+  .mascot-container {
+    right: 5px;
+    bottom: 5px;
+  }
+  
+  .mascot {
+    width: 45px;
+    height: 65px;
+  }
+  
+  .mascot-speech {
+    max-width: 130px;
+    font-size: 0.75rem;
+    padding: 8px 12px;
+  }
+  
+  .mascot-sun {
+    width: 30px;
+    height: 30px;
+  }
+  
+  .mascot-eyes {
+    top: 8px;
+  }
+  
+  .mascot-eye {
+    width: 4px;
+    height: 4px;
+  }
+  
+  .mascot-smile {
+    width: 16px;
+    height: 8px;
+    bottom: 8px;
+    border-bottom-width: 2px;
+  }
+  
+  .mascot-pot {
+    width: 22px;
+    height: 20px;
+  }
+  
+  .mascot-plant {
+    width: 18px;
+    height: 22px;
+    bottom: 14px;
+  }
+  
+  .mascot-stem {
+    height: 14px;
+    width: 2px;
+  }
+  
+  .mascot-leaf {
+    width: 9px;
+    height: 12px;
+  }
+  
+  .mascot-leaf.left {
+    left: 3px;
+    bottom: 10px;
+  }
+  
+  .mascot-leaf.right {
+    right: 3px;
+    bottom: 10px;
+  }
+  
+  .mobile-menu-toggle {
+    padding: 10px;
+    margin: -10px 0 -10px -10px;
+  }
+  
+  .menu-icon, 
+  .menu-icon::before, 
+  .menu-icon::after {
+    height: 2px;
+    background-color: white;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  }
+  
+  .menu-icon {
+    top: 14px;
+  }
+  
+  .menu-icon::before {
+    top: -7px;
+  }
+  
+  .menu-icon::after {
+    bottom: -7px;
   }
 }
 </style>

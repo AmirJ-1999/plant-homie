@@ -31,3 +31,42 @@ export const getUserProfile = () => {
     headers: { Authorization: `Bearer ${token}` }
   });
 };
+
+/* Funktion til at opdatere en brugers abonnement */
+export const updateUserSubscription = (userId, subscriptionPlan) => {
+  console.log(`Updating subscription for user ${userId} to ${subscriptionPlan}`);
+  
+  // Format the request body exactly as expected by the backend controller
+  const requestData = {
+    subscription: subscriptionPlan,
+    Subscription: subscriptionPlan // Include PascalCase version for API compatibility
+  };
+  
+  console.log('Request data:', requestData);
+  
+  return API.put(`/user/${userId}`, requestData)
+    .then(response => {
+      console.log('Subscription update response:', response);
+      return response;
+    })
+    .catch(error => {
+      console.error('Subscription update error:', error.response || error);
+      throw error;
+    });
+};
+
+/* Funktion til at hente en enkelt bruger ved ID */
+export const getUserById = (userId) => {
+  return API.get(`/user/${userId}`)
+    .then(response => {
+      console.log('GetUserById response:', response.data);
+      return response;
+    })
+    .catch(error => {
+      console.error('GetUserById error:', error.response || error);
+      return {
+        status: error.response?.status || 500,
+        data: null
+      };
+    });
+};
