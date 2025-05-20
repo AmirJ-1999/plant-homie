@@ -2,16 +2,42 @@
 import { API } from './api';
 
 /* Funktion til oprettelse af ny bruger */
-export const signup = ({ username, password, plan }) =>
-  API.post('/user/signup', {
+export const signup = ({ username, password, plan }) => {
+  console.log("Sending signup request to Azure backend");
+  return API.post('/user/signup', {
     userName    : username,
     password    : password,
     subscription: plan
   });
+};
   
 /* Funktion til at logge en bruger ind */
-export const login = ({ username, password }) =>
-  API.post('/user/login', { userName: username, password });
+export const login = ({ username, password }) => {
+  const loginUrl = `${API.defaults.baseURL}/user/login`;
+  console.log(`Sending login request to Azure backend: ${loginUrl}`);
+  
+  // Use API instance to maintain consistency
+  return API.post('/user/login', { userName: username, password })
+    .then(response => {
+      // Store token and user info in session storage
+      if (response.data && response.data.token) {
+        console.log('Login successful, storing token');
+        sessionStorage.setItem('token', response.data.token);
+        sessionStorage.setItem('userId', response.data.userId);
+        sessionStorage.setItem('subscription', response.data.subscription);
+        
+        // Add a timestamp to check token age
+        sessionStorage.setItem('tokenTimestamp', Date.now().toString());
+        
+        // For debugging
+        console.log('Token set successfully:', response.data.token.substring(0, 20) + '...');
+        console.log('User ID:', response.data.userId);
+      } else {
+        console.error('Login response missing token:', response.data);
+      }
+      return response;
+    });
+};
 
 /* Funktion til at hente specifikke brugerdata (bemærk: henter pt. alle og filtrerer) */
 export const getUserData = (username) => 

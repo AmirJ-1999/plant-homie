@@ -12,5 +12,15 @@ module.exports = defineConfig({
         __VUE_OPTIONS_API__: 'true'
       })
     ]
+  },
+  // Dev server configuration
+  devServer: {
+    proxy: {
+      '/api': {
+        target: 'https://planthomieapi20250519212023-g3dxbqerfvhhf0a6.northeurope-01.azurewebsites.net',
+        changeOrigin: true,
+        secure: true
+      }
+    }
 }
 })

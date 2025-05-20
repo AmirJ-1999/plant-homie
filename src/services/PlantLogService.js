@@ -53,11 +53,13 @@ const extractPlantLogs = (responseData) => {
  * Get all plant logs
  * @param {Object} params - Optional query parameters
  * @param {number} params.limit - Optional limit on number of logs returned
+ * @param {number} params.plantId - Optional plant ID to filter logs
  * @returns {Promise} Promise with array of plant logs
  */
 export const getAllPlantLogs = (params = {}) => {
   const queryParams = new URLSearchParams();
   if (params.limit) queryParams.append('limit', params.limit);
+  if (params.plantId) queryParams.append('plantId', params.plantId);
   
   const url = params && Object.keys(params).length > 0
     ? `${baseURL}/plantlog?${queryParams}`
@@ -80,14 +82,14 @@ export const getAllPlantLogs = (params = {}) => {
 export const getLatestSensorReadings = async (plantId = 1) => {
   try {
     // Check if user has any plant logs first 
-    const checkLogs = await API.get(`${baseURL}/plantlog?limit=1`);
+    const checkLogs = await API.get(`${baseURL}/plantlog?limit=1${plantId ? `&plantId=${plantId}` : ''}`);
     const hasExistingData = checkLogs.data && 
                           ((checkLogs.data.$values && checkLogs.data.$values.length > 0) ||
                            (Array.isArray(checkLogs.data) && checkLogs.data.length > 0));
     
     // If user has no data yet, return default values to avoid errors
     if (!hasExistingData) {
-      console.log('No existing plant logs found for user, using default readings');
+      console.log(`No existing plant logs found for plant ${plantId}, using default readings`);
       return {
         moisture: 50,
         humidity: 45,
@@ -95,7 +97,7 @@ export const getLatestSensorReadings = async (plantId = 1) => {
       };
     }
     
-    // User has data, attempt to get actual readings
+    // User has data, get actual readings from endpoint
     try {
       const [moistureRes, humidityRes, tempRes] = await Promise.all([
         API.get(`${baseURL}/plantlog/soilmoisture/${plantId}`),
@@ -103,13 +105,64 @@ export const getLatestSensorReadings = async (plantId = 1) => {
         API.get(`${baseURL}/plantlog/temperature/${plantId}`)
       ]);
 
-      return {
-        moisture: typeof moistureRes.data === 'number' ? moistureRes.data : moistureRes.data.moisture ?? 0,
-        humidity: typeof humidityRes.data === 'number' ? humidityRes.data : humidityRes.data.humidity ?? 0,
-        temperature: typeof tempRes.data === 'number' ? tempRes.data : tempRes.data.temperature ?? 0
-      };
+      // Extract values from API response, ensuring they're treated as actual readings
+      // even if they happen to match what we might consider "default" values
+      const moisture = typeof moistureRes.data === 'number' ? moistureRes.data : 
+                    (moistureRes.data && typeof moistureRes.data.moisture === 'number' ? moistureRes.data.moisture : 50);
+      
+      const humidity = typeof humidityRes.data === 'number' ? humidityRes.data : 
+                     (humidityRes.data && typeof humidityRes.data.humidity === 'number' ? humidityRes.data.humidity : 45);
+      
+      const temperature = typeof tempRes.data === 'number' ? tempRes.data : 
+                         (tempRes.data && typeof tempRes.data.temperature === 'number' ? tempRes.data.temperature : 22);
+      
+      console.log(`Retrieved actual sensor values from API for plant ${plantId}:`, { moisture, humidity, temperature });
+      
+      return { moisture, humidity, temperature };
     } catch (error) {
-      console.error('Failed to get individual sensor readings:', error);
+      console.error(`Failed to get individual sensor readings for plant ${plantId}:`, error);
+      
+      // If API endpoints failed, try to get the latest values from plant logs
+      try {
+        const logsResponse = await getAllPlantLogs({ limit: 5, plantId });
+        if (Array.isArray(logsResponse.data) && logsResponse.data.length > 0) {
+          // Filter for logs that have sensor readings and sort by date (newest first)
+          const sensorLogs = logsResponse.data
+            .filter(log => {
+              // Check if this log has any sensor readings
+              return (log.temperatureLevel !== undefined || log.temperature_Level !== undefined ||
+                      log.waterLevel !== undefined || log.water_Level !== undefined ||
+                      log.airHumidityLevel !== undefined || log.air_Humidity_Level !== undefined);
+            })
+            .sort((a, b) => {
+              const dateA = new Date(a.dato_Tid || a.datoTid || a.timestamp || a.date);
+              const dateB = new Date(b.dato_Tid || b.datoTid || b.timestamp || b.date);
+              return dateB - dateA;
+            });
+          
+          if (sensorLogs.length > 0) {
+            const latestLog = sensorLogs[0];
+            console.log(`Using latest log for sensor values for plant ${plantId}:`, latestLog);
+            
+            // Extract values from the latest log
+            const moisture = typeof latestLog.waterLevel === 'number' ? latestLog.waterLevel : 
+                           (typeof latestLog.water_Level === 'number' ? latestLog.water_Level : 50);
+            
+            const humidity = typeof latestLog.airHumidityLevel === 'number' ? latestLog.airHumidityLevel : 
+                           (typeof latestLog.air_Humidity_Level === 'number' ? latestLog.air_Humidity_Level : 45);
+            
+            const temperature = typeof latestLog.temperatureLevel === 'number' ? latestLog.temperatureLevel : 
+                              (typeof latestLog.temperature_Level === 'number' ? latestLog.temperature_Level : 22);
+            
+            console.log(`Using sensor values from latest log for plant ${plantId}:`, { moisture, humidity, temperature });
+            return { moisture, humidity, temperature };
+          }
+        }
+      } catch (logsError) {
+        console.error(`Failed to get sensor readings from logs for plant ${plantId}:`, logsError);
+      }
+      
+      // Default fallback if nothing else works
       return {
         moisture: 50,
         humidity: 45,
@@ -152,7 +205,8 @@ export const saveManualWateringEvent = async (data) => {
           Plant_Name: 'My First Plant',
           Plant_Type: 'Indoor Plant',
           plant_Name: 'My First Plant',
-          plant_Type: 'Indoor Plant'
+          plant_Type: 'Indoor Plant',
+          plant_environment: 'Indoor'
         };
         
         const createResponse = await API.post(`${baseURL}/plant`, defaultPlant);
@@ -225,7 +279,8 @@ export const saveAutoModeEvent = async (data) => {
           Plant_Name: 'My First Plant',
           Plant_Type: 'Indoor Plant',
           plant_Name: 'My First Plant',
-          plant_Type: 'Indoor Plant'
+          plant_Type: 'Indoor Plant',
+          plant_environment: 'Indoor'
         };
         
         const createResponse = await API.post(`${baseURL}/plant`, defaultPlant);
@@ -272,83 +327,87 @@ export const saveAutoModeEvent = async (data) => {
 };
 
 /**
- * Generates and saves initial seed data for a new user's plant
- * This is helpful to populate the dashboard with realistic data
- * @param {number} plantId - ID of the plant to generate data for
- * @returns {Promise} Promise with the created seed data
+ * Generate initial sensor data for a new plant or a plant with no logs
+ * @param {number} plantId - The ID of the plant to generate data for
+ * @returns {Promise} Promise resolving when data generation is complete
  */
 export const generateInitialSensorData = async (plantId = 1) => {
   try {
-    console.log('Generating initial sensor data for plant ID:', plantId);
+    console.log(`Generating initial sensor data for plant ${plantId}`);
     
-    // Create an array to store our promises
-    const logPromises = [];
-    
-    // Generate data points for the last 24 hours (one per hour)
+    // Create data for the last 7 days with 3 entries per day
     const now = new Date();
+    const logs = [];
     
-    for (let i = 24; i >= 0; i--) {
-      const timestamp = new Date(now.getTime() - (i * 60 * 60 * 1000));
-      
-      // Generate random but realistic values
-      const temperature = Math.round((Math.random() * 10 + 20) * 10) / 10; // 20-30°C
-      const moisture = Math.round(Math.random() * 70 + 30); // 30-100%
-      const humidity = Math.round(Math.random() * 40 + 40); // 40-80%
-      const lightLevel = Math.round(Math.random() * 800 + 200); // 200-1000
-      
-      // Create the log entry with both camelCase and PascalCase properties
-      const logEntry = {
-        Plant_ID: plantId,
-        plant_ID: plantId,
-        TemperatureLevel: temperature,
-        temperatureLevel: temperature,
-        WaterLevel: moisture,
-        waterLevel: moisture,
-        AirHumidityLevel: humidity,
-        airHumidityLevel: humidity,
-        LightLevel: lightLevel,
-        lightLevel: lightLevel,
-        // Use dato_Tid format that backend expects
-        Dato_Tid: timestamp.toISOString(),
-        dato_Tid: timestamp.toISOString()
-      };
-      
-      // Add to our array of promises
-      logPromises.push(API.post(`${baseURL}/plantlog`, logEntry));
+    // Go back 7 days and create 3 entries per day
+    for (let day = 7; day >= 0; day--) {
+      for (let entry = 0; entry < 3; entry++) {
+        // Set time to be evenly spread throughout the day
+        const date = new Date(now);
+        date.setDate(date.getDate() - day);
+        date.setHours(8 + (entry * 6)); // 8am, 2pm, 8pm
+        date.setMinutes(Math.floor(Math.random() * 60)); // Random minute
+        
+        // Generate random values within normal ranges
+        // Temperature: normal range 10-30°C
+        const temperature = 15 + Math.random() * 15; // Between 15-30°C
+        
+        // Soil moisture: normal range 20-80%
+        const moisture = 30 + Math.random() * 50; // Between 30-80%
+        
+        // Humidity: normal range 30-70%
+        const humidity = 35 + Math.random() * 35; // Between 35-70%
+        
+        // Create log data with both camelCase and PascalCase fields
+        logs.push({
+          Plant_ID: plantId,
+          plant_ID: plantId,
+          TemperatureLevel: temperature,
+          temperatureLevel: temperature,
+          WaterLevel: moisture,
+          waterLevel: moisture,
+          AirHumidityLevel: humidity,
+          airHumidityLevel: humidity,
+          LightLevel: 800 + Math.random() * 200, // Standard light level
+          lightLevel: 800 + Math.random() * 200,
+          Dato_Tid: date.toISOString(),
+          dato_Tid: date.toISOString()
+        });
+      }
     }
     
-    // Also add a manual watering event from 8 hours ago
-    const wateringTime = new Date(now.getTime() - (8 * 60 * 60 * 1000));
-    const wateringEvent = {
+    // Add one entry that's "now" with slightly more critical values to trigger notifications
+    const criticalLog = {
       Plant_ID: plantId,
       plant_ID: plantId,
-      TemperatureLevel: 23,
-      temperatureLevel: 23,
-      WaterLevel: 90,
-      waterLevel: 90,
-      AirHumidityLevel: 60,
-      airHumidityLevel: 60,
-      LightLevel: 1,
-      lightLevel: 1,
-      Light_Level: 1,
-      light_Level: 1,
-      Dato_Tid: wateringTime.toISOString(),
-      dato_Tid: wateringTime.toISOString(),
-      Action: 'Manual Watering',
-      action: 'Manual Watering'
+      TemperatureLevel: Math.random() < 0.5 ? 8 : 32, // Either too cold or too hot
+      temperatureLevel: Math.random() < 0.5 ? 8 : 32, 
+      WaterLevel: Math.random() < 0.5 ? 15 : 85, // Either too dry or too wet
+      waterLevel: Math.random() < 0.5 ? 15 : 85,
+      AirHumidityLevel: Math.random() < 0.5 ? 25 : 75, // Either too dry or too humid
+      airHumidityLevel: Math.random() < 0.5 ? 25 : 75,
+      LightLevel: 800 + Math.random() * 200,
+      lightLevel: 800 + Math.random() * 200,
+      Dato_Tid: new Date().toISOString(),
+      dato_Tid: new Date().toISOString()
     };
-    logPromises.push(API.post(`${baseURL}/plantlog`, wateringEvent));
+    logs.push(criticalLog);
     
-    // Execute all the log creation requests
-    const results = await Promise.allSettled(logPromises);
+    // Sort logs by date
+    logs.sort((a, b) => new Date(a.dato_Tid) - new Date(b.dato_Tid));
     
-    // Count successful operations
-    const successful = results.filter(r => r.status === 'fulfilled').length;
-    console.log(`Generated ${successful} sensor data points for new plant`);
+    // Submit logs to backend
+    console.log(`Submitting ${logs.length} initial sensor logs`);
     
-    return { success: true, count: successful };
+    // Submit logs in sequence to maintain order
+    for (const log of logs) {
+      await API.post(`${baseURL}/plantlog`, log);
+    }
+    
+    console.log('Initial sensor data generation complete');
+    return { success: true, count: logs.length };
   } catch (error) {
-    console.error('Failed to generate seed data:', error);
-    return { success: false, error };
+    console.error('Failed to generate initial sensor data:', error);
+    throw error;
   }
 };
