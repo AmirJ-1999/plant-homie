@@ -1,6 +1,13 @@
 // src/services/PlantService.js
 import { API } from '@/services/api';
 
+/* -------------------------------------------
+   Vue-CLI henter env-variabler sådan:
+   process.env.VUE_APP_*
+-------------------------------------------- */
+const backendUrl =
+  process.env.VUE_APP_BACKEND_URL || 'https://planthomieapi2025-b4aag0cnb6d2gsf6.westeurope-01.azurewebsites.net/api';
+
 // Helper function to extract array data from various API response formats
 const extractArray = (responseData) => {
   if (Array.isArray(responseData)) {
