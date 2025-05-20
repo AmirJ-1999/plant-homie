@@ -38,6 +38,14 @@ export const createPlant = ({ name, type, file }) => {
   form.append('Plant_Name', name);
   form.append('Plant_type', type);
   
+  // Extract environment from type if it's Indoor Plant or Outdoor Plant
+  const environment = type.includes('Indoor') ? 'Indoor' : 
+                      type.includes('Outdoor') ? 'Outdoor' : '';
+  if (environment) {
+    console.log('Setting plant environment to:', environment);
+    form.append('plant_environment', environment);
+  }
+  
   // Also include the user ID from session storage
   const userId = sessionStorage.getItem('userId');
   if (userId) {
