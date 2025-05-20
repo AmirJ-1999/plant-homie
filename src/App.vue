@@ -51,6 +51,7 @@
         </div>
       </div>
       <div class="nav-right">
+        <NotificationBell class="notification-bell-container" />
         <button @click="logout" class="logout-button">Logout</button>
       </div>
     </nav>
@@ -60,8 +61,13 @@
 </template>
 
 <script>
+import NotificationBell from '@/components/NotificationBell.vue';
+
 export default {
   name: 'App',
+  components: {
+    NotificationBell
+  },
   data() {
     return {
       isLoggedIn: !!sessionStorage.getItem('token'),
@@ -384,11 +390,21 @@ body {
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.notification-bell-container {
+  margin-right: 5px;
+}
+
 .logout-button {
   background-color: #ffffff;
   color: #16a34a;
   border: none;
-  padding: 0.5rem 1.2rem;
+  padding: 8px 15px;
   font-weight: bold;
   border-radius: 6px;
   cursor: pointer;

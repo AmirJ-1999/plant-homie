@@ -130,7 +130,14 @@ export default {
           console.error('Error status:', err.response.status);
           console.error('Error data:', err.response.data);
           
-          if (typeof err.response.data === 'object' && err.response.data.message) {
+          // Check if this is a backend startup issue (500 error)
+          if (err.response.status === 500 || 
+              (err.response.data && (
+                typeof err.response.data === 'string' && err.response.data.includes('Internal Server Error') ||
+                typeof err.response.data === 'object' && err.response.data.error === 'Internal Server Error'
+              ))) {
+            this.errorMessage = 'The server is currently starting up. Please wait a minute and try again. Our backend is hosted on Azure and may take a moment to wake up from sleep mode.';
+          } else if (typeof err.response.data === 'object' && err.response.data.message) {
             this.errorMessage = err.response.data.message;
           } else if (typeof err.response.data === 'string') {
             this.errorMessage = err.response.data;

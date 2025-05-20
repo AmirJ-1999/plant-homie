@@ -11,12 +11,31 @@
     </div>
     
     <h1 class="title">🌿 Plant Homie Dashboard</h1>
+    
+    <!-- Plant Selector -->
+    <div class="plant-selector-container">
+      <label for="plant-selector" class="plant-selector-label">Select Plant:</label>
+      <select 
+        id="plant-selector" 
+        class="plant-selector" 
+        v-model="selectedPlantId"
+        @change="changePlant($event.target.value)"
+      >
+        <option 
+          v-for="plant in plants" 
+          :key="plant.plant_ID || plant.Plant_ID" 
+          :value="plant.plant_ID || plant.Plant_ID"
+        >
+          {{ plant.plant_Name || plant.Plant_Name }}
+        </option>
+      </select>
+    </div>
 
     <div class="grid">
       <!-- Status Panel -->
       <div class="card status-card">
         <div class="card-header">
-          <h2>Plant Status</h2>
+          <h2>{{ selectedPlantName }} Status</h2>
           <div class="health-indicator" :class="plantHealthClass">{{ plantHealth }}</div>
         </div>
         
@@ -70,7 +89,7 @@
         
         <button @click="waterPlant" class="water-button">
           <span class="button-icon">💧</span>
-          <span>Water Plant</span>
+          <span>Water {{ selectedPlantName }}</span>
         </button>
         
         <div class="auto-mode-toggle">
@@ -110,12 +129,13 @@
     <div class="card history-card">
       <h2>Recent Activity</h2>
       <div class="history-timeline">
-        <div v-for="entry in history" :key="entry.id" class="history-item">
+        <div v-for="entry in history" :key="entry.id" class="history-item" :class="{'warning': entry.severity === 'Warning', 'critical': entry.severity === 'Critical'}">
           <div class="history-time">{{ formatTime(entry.timestamp) }}</div>
           <div class="history-date">{{ formatDate(entry.timestamp) }}</div>
           <div class="history-content">
             <div class="history-icon">{{ entry.icon || '📊' }}</div>
-            <div class="history-text">{{ entry.action }}</div>
+            <div class="history-text" v-if="entry.html" v-html="entry.action"></div>
+            <div class="history-text" v-else>{{ entry.action }}</div>
           </div>
         </div>
       </div>
@@ -226,10 +246,11 @@
 </template>
 
 <script>
-import { getLatestNotification } from '@/services/NotificationService';
+import { getAllNotifications } from '@/services/NotificationService';
 import { getLatestSensorReadings, saveManualWateringEvent, saveAutoModeEvent, getAllPlantLogs, generateInitialSensorData } from '@/services/PlantLogService';
 import { API } from '@/services/api';
 import { updateUserSubscription, getUserById } from '@/services/UserService';
+import { getAllPlants } from '@/services/PlantService';
 
 export default {
   name: 'DashboardView',
@@ -248,6 +269,9 @@ export default {
       showUpgradeModal: false,
       selectedPlan: 'Free',
       refreshInterval: null,
+      plants: [],
+      selectedPlantId: 1,
+      selectedPlantName: 'Loading...'
     };
   },
   computed: {
@@ -396,56 +420,48 @@ export default {
           temperature: this.temperature
         };
         
-        // Check if we already have meaningful values (not defaults)
-        const hasRealValues = 
-          currentValues.moisture !== 50 && 
-          currentValues.humidity !== 50 && 
-          currentValues.temperature !== 50;
+        console.log('Current sensor values before API call:', currentValues);
         
-        console.log('Current sensor values before API call:', currentValues, 'hasRealValues:', hasRealValues);
+        // Use the selected plant ID instead of hardcoded 1
+        const readings = await getLatestSensorReadings(this.selectedPlantId);
+        console.log('API returned sensor values:', readings);
         
-        const readings = await getLatestSensorReadings(1);
+        // Update values from API - we'll use the API values whether or not they seem like defaults
+        // since the backend should be providing valid readings
+        this.moisture = readings.moisture;
+        this.humidity = readings.humidity;
+        this.temperature = readings.temperature;
         
-        // Only update values from API if they seem valid (not default 50s)
-        const apiHasRealValues = 
-          readings.moisture !== 50 && 
-          readings.humidity !== 45 && 
-          readings.temperature !== 22 &&
-          readings.temperature !== 23.5;
-          
-        console.log('API returned sensor values:', readings, 'apiHasRealValues:', apiHasRealValues);
-        
-        if (apiHasRealValues) {
-          // API returned non-default values, use them
-          this.moisture = readings.moisture;
-          this.humidity = readings.humidity;
-          this.temperature = readings.temperature;
-          console.log('Updated with API values:', { moisture: this.moisture, humidity: this.humidity, temperature: this.temperature });
-        } else if (!hasRealValues) {
-          // Only use API values as fallback if we don't already have real values
-          this.moisture = readings.moisture;
-          this.humidity = readings.humidity;
-          this.temperature = readings.temperature;
-          console.log('Using API values as fallback:', { moisture: this.moisture, humidity: this.humidity, temperature: this.temperature });
-        } else {
-          console.log('Keeping current values instead of API defaults');
-        }
+        console.log('Updated with sensor values:', { 
+          moisture: this.moisture, 
+          humidity: this.humidity, 
+          temperature: this.temperature 
+        });
         
         // Update last watered time if not already set
         if (this.lastWatered === 'Loading...' || new Date(this.lastWatered).toString() === 'Invalid Date') {
           this.lastWatered = new Date().toLocaleString();
         }
         
-        // Load auto-watering mode from localStorage
-        const savedAutoMode = localStorage.getItem('autoWaterMode');
+        // Load auto-watering mode from localStorage for this plant
+        const savedAutoMode = localStorage.getItem(`autoWaterMode_${this.selectedPlantId}`);
         if (savedAutoMode !== null) {
           this.autoMode = savedAutoMode === 'true';
           console.log('Auto-water mode initialized to:', this.autoMode);
+        } else {
+          // If no specific setting for this plant, check general setting
+          const generalAutoMode = localStorage.getItem('autoWaterMode');
+          if (generalAutoMode !== null) {
+            this.autoMode = generalAutoMode === 'true';
+          } else {
+            this.autoMode = false; // Default to off
+          }
         }
         
         // Also check the latest auto-watering state from history
         try {
-          const historyRes = await getAllPlantLogs({ limit: 5 });
+          // Use selectedPlantId for getting history
+          const historyRes = await getAllPlantLogs({ limit: 5, plantId: this.selectedPlantId });
           if (Array.isArray(historyRes.data) && historyRes.data.length > 0) {
             // Look for the most recent auto-watering event
             const autoEvents = historyRes.data.filter(log => {
@@ -470,7 +486,7 @@ export default {
               if (this.autoMode !== serverAutoMode) {
                 console.log('Updating auto-mode from server state:', serverAutoMode);
                 this.autoMode = serverAutoMode;
-                localStorage.setItem('autoWaterMode', this.autoMode.toString());
+                localStorage.setItem(`autoWaterMode_${this.selectedPlantId}`, this.autoMode.toString());
               }
             }
           }
@@ -480,109 +496,69 @@ export default {
       } catch (err) {
         console.error('Could not fetch sensor readings from API:', err);
         
-        // Only try to get history values if we don't already have real values
-        const hasRealValues = 
-          this.moisture !== 50 && 
-          this.humidity !== 50 && 
-          this.temperature !== 50;
-          
-        if (!hasRealValues) {
-          // Try to get the most recent sensor data from plant logs history
-          try {
-            const historyRes = await getAllPlantLogs({ limit: 10 });
-            if (Array.isArray(historyRes.data) && historyRes.data.length > 0) {
-              // Filter out non-sensor logs and sort by date (newest first)
-              const sensorLogs = historyRes.data
-                .filter(log => {
-                  const lightLevel = log.lightLevel || log.light_Level;
-                  // Only consider regular sensor logs (not watering events)
-                  return lightLevel !== 999 && lightLevel !== 0 && lightLevel !== 1;
-                })
-                .sort((a, b) => {
-                  const dateA = new Date(a.dato_Tid || a.datoTid || a.timestamp || a.date);
-                  const dateB = new Date(b.dato_Tid || b.datoTid || b.timestamp || b.date);
-                  return dateB - dateA;
-                });
+        // Try to get the most recent sensor data from plant logs history
+        try {
+          const historyRes = await getAllPlantLogs({ limit: 10, plantId: this.selectedPlantId });
+          if (Array.isArray(historyRes.data) && historyRes.data.length > 0) {
+            // Filter out non-sensor logs and sort by date (newest first)
+            const sensorLogs = historyRes.data
+              .filter(log => {
+                const lightLevel = log.lightLevel || log.light_Level;
+                // Only consider regular sensor logs (not watering events)
+                return lightLevel !== 999 && lightLevel !== 0 && lightLevel !== 1;
+              })
+              .sort((a, b) => {
+                const dateA = new Date(a.dato_Tid || a.datoTid || a.timestamp || a.date);
+                const dateB = new Date(b.dato_Tid || b.datoTid || b.timestamp || b.date);
+                return dateB - dateA;
+              });
+            
+            if (sensorLogs.length > 0) {
+              const latestLog = sensorLogs[0];
               
-              if (sensorLogs.length > 0) {
-                const latestLog = sensorLogs[0];
-                
-                // Extract values from the latest log, handling different field naming conventions
-                this.moisture = typeof latestLog.waterLevel === 'number' ? latestLog.waterLevel : 
-                               (typeof latestLog.water_Level === 'number' ? latestLog.water_Level : 50);
-                
-                this.humidity = typeof latestLog.airHumidityLevel === 'number' ? latestLog.airHumidityLevel : 
-                               (typeof latestLog.air_Humidity_Level === 'number' ? latestLog.air_Humidity_Level : 45);
-                
-                this.temperature = typeof latestLog.temperatureLevel === 'number' ? latestLog.temperatureLevel : 
-                                 (typeof latestLog.temperature_Level === 'number' ? latestLog.temperature_Level : 23.5);
-                
-                console.log('Using latest sensor values from history:', { 
-                  moisture: this.moisture, 
-                  humidity: this.humidity, 
-                  temperature: this.temperature 
-                });
-                
-                // Update lastWatered from history if we have a manual watering entry
-                const wateringEvents = historyRes.data
-                  .filter(log => {
-                    const lightLevel = log.lightLevel || log.light_Level;
-                    const logAction = log.action || log.Action;
-                    return lightLevel === 1 || logAction === 'Manual Watering';
-                  })
-                  .sort((a, b) => {
-                    const dateA = new Date(a.dato_Tid || a.datoTid || a.timestamp || a.date);
-                    const dateB = new Date(b.dato_Tid || b.datoTid || b.timestamp || b.date);
-                    return dateB - dateA;
-                  });
-                
-                if (wateringEvents.length > 0) {
-                  const lastWateredTimestamp = wateringEvents[0].dato_Tid || 
-                                             wateringEvents[0].datoTid || 
-                                             wateringEvents[0].timestamp || 
-                                             wateringEvents[0].date;
-                  this.lastWatered = new Date(lastWateredTimestamp).toLocaleString();
-                }
-              } else {
-                // No sensor logs found, fall back to defaults
-                console.log('No sensor logs found in history, using defaults');
-                this.moisture = 50;
-                this.humidity = 45;
-                this.temperature = 23.5;
-              }
+              // Extract values from the latest log, handling different field naming conventions
+              this.moisture = typeof latestLog.waterLevel === 'number' ? latestLog.waterLevel : 
+                             (typeof latestLog.water_Level === 'number' ? latestLog.water_Level : 50);
+              
+              this.humidity = typeof latestLog.airHumidityLevel === 'number' ? latestLog.airHumidityLevel : 
+                             (typeof latestLog.air_Humidity_Level === 'number' ? latestLog.air_Humidity_Level : 45);
+              
+              this.temperature = typeof latestLog.temperatureLevel === 'number' ? latestLog.temperatureLevel : 
+                               (typeof latestLog.temperature_Level === 'number' ? latestLog.temperature_Level : 23.5);
+              
+              console.log('Using latest sensor values from history:', { 
+                moisture: this.moisture, 
+                humidity: this.humidity, 
+                temperature: this.temperature 
+              });
             } else {
-              // No logs found, fall back to defaults
-              console.log('No logs found in history, using defaults');
+              console.log('No sensor logs found in history, using defaults');
               this.moisture = 50;
               this.humidity = 45;
               this.temperature = 23.5;
             }
-          } catch (historyError) {
-            console.error('Could not fetch sensor readings from history:', historyError);
-            // Fallback to default values as last resort
+          } else {
+            console.log('No logs found in history, using defaults');
             this.moisture = 50;
             this.humidity = 45;
             this.temperature = 23.5;
           }
-        } else {
-          console.log('Keeping current real values instead of loading defaults');
+        } catch (historyError) {
+          console.error('Could not fetch sensor readings from history:', historyError);
+          // Fallback to default values as last resort
+          this.moisture = 50;
+          this.humidity = 45;
+          this.temperature = 23.5;
         }
         
         this.lastWatered = this.lastWatered || new Date().toLocaleString();
-        
-        // Still try to get auto mode from localStorage
-        const savedAutoMode = localStorage.getItem('autoWaterMode');
-        if (savedAutoMode !== null) {
-          this.autoMode = savedAutoMode === 'true';
-          console.log('Auto-water mode initialized to:', this.autoMode);
-        }
       }
     },
     waterPlant() {
       this.message = 'Watering your plant...';
       
       saveManualWateringEvent({
-        plantId: 1,
+        plantId: this.selectedPlantId,
         moisture: this.moisture,
         humidity: this.humidity,
         temperature: this.temperature
@@ -631,7 +607,10 @@ export default {
       // Toggle auto-watering mode
       this.autoMode = !this.autoMode;
       
-      // Save the new status in localStorage
+      // Save the new status in localStorage with plant-specific key
+      localStorage.setItem(`autoWaterMode_${this.selectedPlantId}`, this.autoMode.toString());
+      
+      // Also save in general setting for backward compatibility
       localStorage.setItem('autoWaterMode', this.autoMode.toString());
       
       // Show an appropriate message to the user
@@ -656,7 +635,7 @@ export default {
     async saveAutoModeEvent(isEnabled) {
       try {
         const response = await saveAutoModeEvent({
-          plantId: 1,
+          plantId: this.selectedPlantId,
           isEnabled: isEnabled,
           moisture: this.moisture,
           humidity: this.humidity,
@@ -675,13 +654,30 @@ export default {
     },
     async loadHistory() {
       try {
-        // Load plant logs from service
-        const res = await getAllPlantLogs({ limit: 10 });
+        // Load plant logs from service for the selected plant
+        const res = await getAllPlantLogs({ limit: 10, plantId: this.selectedPlantId });
         let historyItems = [];
         
         if (Array.isArray(res.data)) {
-          // Process the plant log data
-          historyItems = res.data.map(log => {
+          // First, include all sensor readings in history
+          const sensorReadings = res.data
+            .filter(log => {
+              // Include all logs that have temperature, moisture or humidity readings
+              return (
+                (log.temperatureLevel !== undefined || log.temperature_Level !== undefined) ||
+                (log.waterLevel !== undefined || log.water_Level !== undefined) ||
+                (log.airHumidityLevel !== undefined || log.air_Humidity_Level !== undefined)
+              );
+            })
+            .sort((a, b) => {
+              const dateA = new Date(a.dato_Tid || a.datoTid || a.timestamp || a.date);
+              const dateB = new Date(b.dato_Tid || b.datoTid || b.timestamp || b.date);
+              return dateB - dateA;
+            })
+            .slice(0, 5); // Only take the 5 most recent readings
+          
+          // Process each sensor reading
+          sensorReadings.forEach(log => {
             // Handle variations in field names and ensure values are valid numbers
             const lightLevel = log.lightLevel !== undefined ? log.lightLevel : log.light_Level;
             const timestamp = new Date(log.dato_Tid || log.datoTid || log.timestamp || log.date);
@@ -702,57 +698,182 @@ export default {
             // Check if this is an auto-watering event
             if (lightLevel === 999 || lightLevel === 0) {
               const isEnabled = lightLevel === 999;
-              return {
+              historyItems.push({
                 id: plantLogId,
                 timestamp: timestamp,
                 action: isEnabled ? 'Auto-watering mode enabled' : 'Auto-watering mode disabled',
                 icon: '🤖'
-              };
+              });
             } 
             // Check if this is a manual watering event
             else if (lightLevel === 1 || logAction === 'Manual Watering') {
-              return {
+              historyItems.push({
                 id: plantLogId,
                 timestamp: timestamp,
                 action: 'Plant watered manually',
                 icon: '💧'
-              };
+              });
             }
-            // Regular sensor log
+            // Regular sensor log - enhanced to show status and formatting similar to the history view
             else {
-              return {
+              // Analyze sensor values and generate status messages
+              let statusMessage = '';
+              let severity = null;
+              
+              // Check temperature
+              if (temperature < 5) {
+                statusMessage = `Temperature is critically low (${temperature.toFixed(1)}°C)! Move to a warmer location immediately.`;
+                severity = 'Critical';
+              } else if (temperature < 10) {
+                statusMessage = `Temperature is low (${temperature.toFixed(1)}°C). Consider moving to a warmer spot.`;
+                severity = 'Warning';
+              } else if (temperature > 35) {
+                statusMessage = `Temperature is critically high (${temperature.toFixed(1)}°C)! Move away from heat sources immediately.`;
+                severity = 'Critical';
+              } else if (temperature > 30) {
+                statusMessage = `Temperature is high (${temperature.toFixed(1)}°C). Consider moving to a cooler spot.`;
+                severity = 'Warning';
+              }
+              
+              // Check moisture
+              if (!statusMessage && moisture < 10) {
+                statusMessage = `Soil is critically dry (${moisture.toFixed(1)}%)! Water immediately.`;
+                severity = 'Critical';
+              } else if (!statusMessage && moisture < 20) {
+                statusMessage = `Soil is dry (${moisture.toFixed(1)}%). Plant needs water soon.`;
+                severity = 'Warning';
+              } else if (!statusMessage && moisture > 90) {
+                statusMessage = `Soil is critically wet (${moisture.toFixed(1)}%)! Reduce watering immediately.`;
+                severity = 'Critical';
+              } else if (!statusMessage && moisture > 80) {
+                statusMessage = `Soil is quite wet (${moisture.toFixed(1)}%). Consider reducing watering.`;
+                severity = 'Warning';
+              }
+              
+              // Check humidity
+              if (!statusMessage && humidity < 20) {
+                statusMessage = `Air humidity is critically low (${humidity.toFixed(1)}%)! Consider using a humidifier.`;
+                severity = 'Critical';
+              } else if (!statusMessage && humidity < 30) {
+                statusMessage = `Air humidity is low (${humidity.toFixed(1)}%). Consider misting the plant.`;
+                severity = 'Warning';
+              } else if (!statusMessage && humidity > 80) {
+                statusMessage = `Air humidity is very high (${humidity.toFixed(1)}%). Improve air circulation.`;
+                severity = 'Warning';
+              } else if (!statusMessage && humidity > 90) {
+                statusMessage = `Air humidity is critically high (${humidity.toFixed(1)}%)! Risk of fungal disease.`;
+                severity = 'Critical';
+              }
+              
+              // If no issues found, create a normal reading
+              if (!statusMessage) {
+                statusMessage = `Temp: ${temperature.toFixed(1)}°C, Moisture: ${moisture.toFixed(1)}%, Humidity: ${humidity.toFixed(1)}%`;
+              } else {
+                // Include the raw readings after the status message
+                statusMessage = `${statusMessage} (Temperature: ${temperature.toFixed(1)}°C, Moisture: ${moisture.toFixed(1)}%, Humidity: ${humidity.toFixed(1)}%)`;
+              }
+              
+              // Format with severity badge if applicable
+              let actionText = statusMessage;
+              if (severity === 'Critical') {
+                actionText = `<span class="severity critical">Critical state</span> ${statusMessage}`;
+              } else if (severity === 'Warning') {
+                actionText = `<span class="severity warning">Needs attention</span> ${statusMessage}`;
+              }
+
+              historyItems.push({
                 id: plantLogId,
                 timestamp: timestamp,
-                action: `Temp: ${temperature.toFixed(2)}°C, Moisture: ${moisture.toFixed(2)}%, Humidity: ${humidity.toFixed(2)}%`,
-                icon: '📊'
-              };
+                action: actionText,
+                icon: '📊',
+                html: true,
+                severity: severity
+              });
             }
           });
         }
         
-        // Try to fetch notifications
+        // Try to fetch notifications for this specific plant
         try {
-          const notificationRes = await getLatestNotification();
-          if (notificationRes.data) {
-            const notification = notificationRes.data;
-            // Determine notification icon based on type
-            let icon = '🔔';
-            if (notification.type === 'Water') icon = '💧';
-            else if (notification.type === 'Humidity') icon = '💨';
-            else if (notification.type === 'Temperature') icon = '🌡️';
+          const notificationRes = await getAllNotifications();
+          if (notificationRes.data && Array.isArray(notificationRes.data) && notificationRes.data.length > 0) {
+            // Filter notifications for this plant only
+            const plantNotifications = notificationRes.data.filter(notification => 
+              notification.plant_ID === this.selectedPlantId || notification.Plant_ID === this.selectedPlantId
+            );
             
-            historyItems.push({
-              id: `notification-${notification.notification_ID}`,
-              timestamp: new Date(notification.dato_Tid),
-              action: notification.message || 'System notification',
-              icon: icon
+            // Get up to 3 most recent notifications
+            const recentNotifications = plantNotifications
+              .sort((a, b) => {
+                const dateA = new Date(a.dato_Tid);
+                const dateB = new Date(b.dato_Tid);
+                return dateB - dateA;
+              })
+              .slice(0, 3);
+              
+            // Add each notification to history items
+            recentNotifications.forEach(notification => {
+              // Determine notification icon based on type
+              let icon = '🔔';
+              let notificationType = notification.type || '';
+              let severity = notification.notificationType || notification.NotificationType || '';
+              
+              // Determine type from message if not set
+              if (!notificationType) {
+                if (notification.message?.toLowerCase().includes('moisture') || 
+                    notification.message?.toLowerCase().includes('soil') || 
+                    notification.message?.toLowerCase().includes('water')) {
+                  notificationType = 'Water';
+                } else if (notification.message?.toLowerCase().includes('humidity')) {
+                  notificationType = 'Humidity';
+                } else if (notification.message?.toLowerCase().includes('temperature') ||
+                           notification.message?.toLowerCase().includes('°c')) {
+                  notificationType = 'Temperature';
+                }
+              }
+              
+              // Set icon based on type
+              if (notificationType === 'Water' || notificationType === 'Moisture') icon = '💧';
+              else if (notificationType === 'Humidity') icon = '💨';
+              else if (notificationType === 'Temperature') icon = '🌡️';
+              
+              // Determine severity if not already set
+              if (!severity) {
+                if (notification.message?.toLowerCase().includes('critical')) {
+                  severity = 'Critical';
+                } else if (notification.message?.toLowerCase().includes('warning')) {
+                  severity = 'Warning';
+                } else if (notification.message?.includes('immediately') || 
+                          notification.message?.includes('dangerously')) {
+                  severity = 'Critical';
+                }
+              }
+
+              // Use the actual notification message instead of "Notification for {plantName}"
+              let actionText = notification.message || 'System notification';
+              
+              // Format with severity badge if applicable
+              if (severity === 'Critical') {
+                actionText = `<span class="severity critical">Critical state</span> ${actionText}`;
+              } else if (severity === 'Warning') {
+                actionText = `<span class="severity warning">Needs attention</span> ${actionText}`;
+              }
+              
+              historyItems.push({
+                id: `notification-${notification.notification_ID}`,
+                timestamp: new Date(notification.dato_Tid),
+                action: actionText,
+                icon: icon,
+                html: true,  // Flag to indicate this contains HTML
+                severity: severity  // Store severity for styling
+              });
             });
           }
         } catch (notificationErr) {
           console.error('Could not fetch notifications:', notificationErr);
         }
         
-        // Sort by timestamp, newest first
+        // Sort by timestamp, newest first, and take the 5 most recent events
         this.history = historyItems.sort((a, b) => b.timestamp - a.timestamp).slice(0, 5);
       } catch (err) {
         console.error('Could not fetch history from backend:', err);
@@ -838,7 +959,8 @@ export default {
             Plant_Name: 'My First Plant',
             Plant_Type: 'Indoor Plant',
             plant_Name: 'My First Plant',
-            plant_Type: 'Indoor Plant'
+            plant_Type: 'Indoor Plant',
+            plant_environment: 'Indoor'
           };
           
           const createResponse = await API.post('/plant', defaultPlant);
@@ -886,17 +1008,98 @@ export default {
         return { plant_ID: 1, plant_Name: 'My Plant', plant_Type: 'Default' };
       }
     },
+    async loadPlants() {
+      try {
+        // Fetch all plants using PlantService
+        const response = await getAllPlants();
+        
+        if (response && response.data && Array.isArray(response.data)) {
+          this.plants = response.data;
+          
+          // Set the selected plant to the first one if we don't have a selection yet
+          if (this.plants.length > 0 && this.selectedPlantId === 1) {
+            const firstPlant = this.plants[0];
+            this.selectedPlantId = firstPlant.plant_ID || firstPlant.Plant_ID;
+            this.selectedPlantName = firstPlant.plant_Name || firstPlant.Plant_Name;
+          }
+          
+          // Update the selected plant name if we already have a selected ID
+          const selectedPlant = this.plants.find(p => 
+            (p.plant_ID && p.plant_ID === this.selectedPlantId) || 
+            (p.Plant_ID && p.Plant_ID === this.selectedPlantId)
+          );
+          
+          if (selectedPlant) {
+            this.selectedPlantName = selectedPlant.plant_Name || selectedPlant.Plant_Name;
+          }
+          
+          console.log(`Loaded ${this.plants.length} plants, selected plant ID: ${this.selectedPlantId}`);
+        } else {
+          console.log('No plants found or invalid response format');
+          this.plants = [];
+        }
+      } catch (error) {
+        console.error('Error loading plants:', error);
+        this.plants = [];
+      }
+    },
+    async changePlant(plantId) {
+      // Find the plant in our list
+      const plant = this.plants.find(p => 
+        (p.plant_ID && p.plant_ID == plantId) || 
+        (p.Plant_ID && p.Plant_ID == plantId)
+      );
+      
+      if (!plant) {
+        console.error(`Plant with ID ${plantId} not found`);
+        return;
+      }
+      
+      // Update selected plant
+      this.selectedPlantId = parseInt(plantId);
+      this.selectedPlantName = plant.plant_Name || plant.Plant_Name;
+      
+      // Reset sensor values during transition
+      this.moisture = 0;
+      this.humidity = 0;
+      this.temperature = 0;
+      this.lastWatered = "Loading...";
+      
+      // Show message to user
+      this.message = `Loading data for ${this.selectedPlantName}...`;
+      
+      // Refresh data for the selected plant
+      await this.fetchStatus();
+      await this.loadHistory();
+      
+      // Clear message
+      setTimeout(() => {
+        this.message = '';
+      }, 1500);
+    },
   },
   async mounted() {
     // First fetch user information
     await this.fetchUserInfo();
     
+    // Load all available plants
+    await this.loadPlants();
+    
     // Check if user has plants and create one if not
-    await this.checkAndCreateDefaultPlant();
+    const defaultPlant = await this.checkAndCreateDefaultPlant();
+    
+    // If we created a default plant or loaded one, use its ID
+    if (defaultPlant && defaultPlant.plant_ID) {
+      this.selectedPlantId = defaultPlant.plant_ID;
+      // Also update the plant name if available
+      if (defaultPlant.plant_Name) {
+        this.selectedPlantName = defaultPlant.plant_Name;
+      }
+    }
     
     // First try to get sensor data directly from history
     try {
-      const historyRes = await getAllPlantLogs({ limit: 20 });
+      const historyRes = await getAllPlantLogs({ limit: 20, plantId: this.selectedPlantId });
       if (Array.isArray(historyRes.data) && historyRes.data.length > 0) {
         console.log('Got history logs:', historyRes.data);
         
@@ -1092,6 +1295,42 @@ export default {
 </script>
 
 <style scoped>
+.plant-selector-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+  background-color: white;
+  padding: 0.8rem 1.2rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+}
+
+.plant-selector-label {
+  font-weight: 500;
+  margin-right: 1rem;
+  color: #4b5563;
+}
+
+.plant-selector {
+  padding: 0.5rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background-color: white;
+  color: #1f2937;
+  font-size: 1rem;
+  min-width: 200px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.plant-selector:hover, 
+.plant-selector:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+  outline: none;
+}
+
 .dashboard-container {
   max-width: 1000px;
   margin: 0 auto;
@@ -1389,7 +1628,18 @@ input:checked ~ .toggle-text {
 
 .history-item {
   display: flex;
-  align-items: flex-start;
+  padding: 0.8rem 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.history-item.warning {
+  border-left: 4px solid #ffcc00;
+  padding-left: 10px;
+}
+
+.history-item.critical {
+  border-left: 4px solid #ff4757;
+  padding-left: 10px;
 }
 
 .history-time {
@@ -1424,6 +1674,25 @@ input:checked ~ .toggle-text {
 .history-text {
   font-size: 0.9rem;
   color: #4b5563;
+}
+
+.severity {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  margin-right: 5px;
+}
+
+.severity.critical {
+  background-color: #ffebee;
+  color: #d32f2f;
+}
+
+.severity.warning {
+  background-color: #fff8e1;
+  color: #ff8f00;
 }
 
 /* Responsive design for mobile */

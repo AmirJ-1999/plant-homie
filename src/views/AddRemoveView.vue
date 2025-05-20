@@ -3,6 +3,14 @@
     <h1 class="page-title">My Plants <span class="plants-count">{{ plants.length }}/{{ getMaxPlantsAllowed() }}</span></h1>
 
     <div class="controls">
+      <div class="filter-dropdown">
+        <label for="filter-select">Filter</label>
+        <select id="filter-select" v-model="filterOption" @change="filterPlants">
+          <option value="all">All Plants</option>
+          <option value="indoor">Indoors</option>
+          <option value="outdoor">Outdoors</option>
+        </select>
+      </div>
       <div class="sort-dropdown">
         <label for="sort-select">Sort</label>
         <select id="sort-select" v-model="sortOption" @change="sortPlants">
@@ -73,13 +81,25 @@
           </div>
           
           <div class="form-group">
+            <label for="plant-environment">Plant Environment</label>
+            <select 
+              id="plant-environment" 
+              v-model="plantEnvironment"
+              class="environment-select"
+            >
+              <option value="">Custom</option>
+              <option value="Indoor">Indoor Plant</option>
+              <option value="Outdoor">Outdoor Plant</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
             <label for="plant-image">Plant Image</label>
             <input 
               id="plant-image" 
               type="file" 
               @change="handleFile" 
               accept="image/*" 
-              required 
               class="file-input"
             />
             <div class="image-preview" v-if="previewUrl">
@@ -152,8 +172,10 @@ export default {
       showAddModal: false,
       removingPlantId: null,
       isLoading: false,
-      backend: process.env.VUE_APP_BACKEND_URL || 'https://planthomieapi2025-b4aag0cnb6d2gsf6.westeurope-01.azurewebsites.net/api',
+      backend: 'https://planthomieapi20250519212023-g3dxbqerfvhhf0a6.northeurope-01.azurewebsites.net/api',  // Latest Azure backend
       selectedPlant: null,
+      plantEnvironment: '',
+      filterOption: 'all',
     };
   },
   computed: {
@@ -181,7 +203,7 @@ export default {
         
         // The data should now be an array thanks to our PlantService handling
         this.plants = Array.isArray(response.data) ? response.data : [];
-        this.sortPlants();
+        this.filterPlants(); // Apply filtering and sorting
       } catch (err) {
         console.error('Could not load plants:', err);
         
@@ -198,7 +220,7 @@ export default {
         }
         
         this.plants = [];
-        this.sortPlants();
+        this.filterPlants(); // Apply filtering even with empty array
       }
     },
     getMaxPlantsAllowed() {
@@ -210,23 +232,47 @@ export default {
         default: return 10; // Standard for gratis abonnement
       }
     },
-    sortPlants() {
-      this.sortedPlants = [...this.plants];
+    filterPlants() {
+      // First filter by environment
+      let filteredPlants = [...this.plants];
       
+      if (this.filterOption === 'indoor') {
+        filteredPlants = filteredPlants.filter(plant => {
+          // Check for plant_environment or extract from plant_Type or Plant_Type
+          const environment = plant.plant_environment || '';
+          const type = (plant.plant_Type || plant.plant_type || '').toLowerCase();
+          return environment === 'Indoor' || type.includes('indoor');
+        });
+      } else if (this.filterOption === 'outdoor') {
+        filteredPlants = filteredPlants.filter(plant => {
+          const environment = plant.plant_environment || '';
+          const type = (plant.plant_Type || plant.plant_type || '').toLowerCase();
+          return environment === 'Outdoor' || type.includes('outdoor');
+        });
+      }
+      
+      // Then sort the filtered plants
+      this.sortFilteredPlants(filteredPlants);
+    },
+    sortFilteredPlants(filteredPlants) {
       switch (this.sortOption) {
         case 'name-asc':
-          this.sortedPlants.sort((a, b) => a.plant_Name.localeCompare(b.plant_Name));
+          filteredPlants.sort((a, b) => a.plant_Name.localeCompare(b.plant_Name));
           break;
         case 'name-desc':
-          this.sortedPlants.sort((a, b) => b.plant_Name.localeCompare(a.plant_Name));
+          filteredPlants.sort((a, b) => b.plant_Name.localeCompare(a.plant_Name));
           break;
         case 'date-asc':
-          this.sortedPlants.sort((a, b) => a.plant_ID - b.plant_ID);
+          filteredPlants.sort((a, b) => a.plant_ID - b.plant_ID);
           break;
         case 'date-desc':
-          this.sortedPlants.sort((a, b) => b.plant_ID - a.plant_ID);
+          filteredPlants.sort((a, b) => b.plant_ID - a.plant_ID);
           break;
       }
+      this.sortedPlants = filteredPlants;
+    },
+    sortPlants() {
+      this.filterPlants(); // Apply filtering and sorting in one step
     },
     openAddModal() {
       if (this.plants.length >= this.getMaxPlantsAllowed()) {
@@ -240,6 +286,7 @@ export default {
       this.newPlantName = '';
       this.file = null;
       this.previewUrl = '';
+      this.plantEnvironment = '';
     },
     handleFile(e) {
       this.file = e.target.files[0] || null;
@@ -272,12 +319,7 @@ export default {
         return;
       }
       
-      // Vi skal have et billede, før vi kan gå videre
-      if (!this.file) {
-        console.warn('No image file selected');
-        alert('Please select an image for your plant.');
-        return;
-      }
+      // Image is optional, so we don't need to check for it anymore
       
       // Check if user is properly authenticated
       const token = sessionStorage.getItem('token');
@@ -291,14 +333,19 @@ export default {
       console.log('Validated input, proceeding with plant creation');
       
       try {
+        // Determine plant type based on environment or custom type
+        const plantType = this.plantEnvironment ? `${this.plantEnvironment} Plant` : 'Custom';
+        
         const response = await createPlant({
           name: trimmedName,
-          type: 'Custom',
+          type: plantType,
           file: this.file
         });
         
         console.log('Plant creation successful:', response.data);
         this.closeAddModal();
+        // Set filter to 'all' to ensure the user can see their newly added plant
+        this.filterOption = 'all';
         await this.loadPlants();
       } catch (err) {
         console.error('Could not add plant:', err);
@@ -402,7 +449,24 @@ export default {
 .controls {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 1rem;
   margin-bottom: 2rem;
+}
+
+.filter-dropdown {
+  background-color: white;
+  color: #333;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.filter-dropdown select {
+  margin-left: 0.5rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
 }
 
 .sort-dropdown {
@@ -765,8 +829,11 @@ export default {
   .controls {
     margin-bottom: 1.5rem;
     justify-content: center;
+    flex-direction: column;
+    gap: 0.75rem;
   }
   
+  .filter-dropdown,
   .sort-dropdown {
     width: 100%;
     max-width: 300px;
@@ -776,6 +843,7 @@ export default {
     padding: 0.5rem 0.8rem;
   }
   
+  .filter-dropdown select,
   .sort-dropdown select {
     flex: 1;
     margin-left: 0.5rem;
@@ -794,7 +862,7 @@ export default {
     padding: 0.7rem;
     border-width: 2px;
   }
-
+  
   .plant-name {
     font-size: 0.9rem;
     padding: 0.4rem;
@@ -900,38 +968,43 @@ export default {
   }
 }
 
-@media (max-width: 480px) {
-  .plants-page {
-    padding: 3.5rem 0.7rem 4rem 0.7rem;
-  }
-  
-  .page-title {
-    font-size: 2rem;
-    margin-bottom: 1rem;
-    margin-top: 0;
-    padding-top: 0;
-    display: block;
-    font-weight: bold;
-    color: white;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.3);
-    position: relative;
-    z-index: 5;
-  }
-  
-  .plants-count {
-    font-size: 1rem;
-    opacity: 0.9;
-  }
-  
-  .controls {
-    margin-bottom: 1.2rem;
-  }
-  
-  .sort-dropdown {
-    width: 90%;
-    max-width: 300px;
-    padding: 0.4rem 0.8rem;
-  }
+  @media (max-width: 480px) {
+    .plants-page {
+      padding: 3.5rem 0.7rem 4rem 0.7rem;
+    }
+    
+    .page-title {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+      margin-top: 0;
+      padding-top: 0;
+      display: block;
+      font-weight: bold;
+      color: white;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      position: relative;
+      z-index: 5;
+    }
+    
+    .plants-count {
+      font-size: 1rem;
+      opacity: 0.9;
+    }
+    
+    .controls {
+      margin-bottom: 1.2rem;
+      flex-direction: column;
+      gap: 0.6rem;
+      width: 100%;
+      align-items: center;
+    }
+    
+    .filter-dropdown,
+    .sort-dropdown {
+      width: 90%;
+      max-width: 300px;
+      padding: 0.4rem 0.8rem;
+    }
   
   .plants-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -1110,5 +1183,15 @@ export default {
 
 .delete-button:hover {
   background-color: #ff3333;
+}
+
+.environment-select {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background-color: white;
+  font-size: 1rem;
+  color: #333;
 }
 </style>

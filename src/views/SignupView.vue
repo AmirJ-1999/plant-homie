@@ -186,9 +186,18 @@ export default {
         this.message = '✅ Account created successfully! Redirecting to login...';
         setTimeout(() => this.$router.push('/login'), 1200);
       } catch (err) {
-        this.ok      = false;
-        this.message =
-          err.response?.data ?? '❌ Could not create user (server error).';
+        this.ok = false;
+        
+        // Check if this is a backend startup issue (500 error)
+        if (err.response?.status === 500 || 
+            (err.response?.data && (
+              typeof err.response.data === 'string' && err.response.data.includes('Internal Server Error') ||
+              typeof err.response.data === 'object' && err.response.data.error === 'Internal Server Error'
+            ))) {
+          this.message = '❌ The server is currently starting up. Please wait a minute and try again. Our backend is hosted on Azure and may take a moment to wake up from sleep mode.';
+        } else {
+          this.message = err.response?.data ?? '❌ Could not create user (server error).';
+        }
       }
     }
   }
